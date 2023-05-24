@@ -37,9 +37,32 @@ router.post('/', async (req, res, next) => {
 
 router.put('/:id', async (req, res, next) => {
     try {
-        const { id } = req.params;
-        const { comp_code, amt } = req.body;
-        const results = await db.query('UPDATE invoices SET comp_code=$1, amt=$2 WHERE id=$3 RETURNING comp_code, amt', [comp_code, amt, id]);
+        let { amt, paid } = req.body;
+        let id = req.params.id;
+        let paid_date = null;
+
+        const currResult = await db.query(
+            'SELECT paid_date FROM invoices WHERE id = $1', [id]
+        );
+
+        if (currResult.rows.length === 0) {
+            throw new ExpressError(`Invoice data not available for ${id}`, 404);
+        }
+
+        const currPaidDate = currResult.rows[0].paid_date;
+
+        if (!currPaidDate && paid) {
+            paid_date = new Date();
+        } else if (!paid) {
+            paid_date = null;
+        } else {
+            paid_date = currPaidDate;
+        }
+
+        const results = await db.query(
+            "UPDATE invoices SET amt=$1, paid=$2, paid_date=$3 WHERE id=$4 RETURNING id, comp_code, amt, paid, add_date, paid_date",
+            [amt, paid, paid_date, id]
+        );
         if (results.rows.length === 0) {
             throw new ExpressError(`Can't find invoice with id:${id}`, 404);
         }
@@ -48,7 +71,6 @@ router.put('/:id', async (req, res, next) => {
         return next(e);
     }
 });
-
 
 router.delete('/:id', async (req, res, next) => {
     try {
@@ -64,11 +86,3 @@ router.delete('/:id', async (req, res, next) => {
 });
 
 module.exports = router;
-
-
-
-
-
-
-
-
